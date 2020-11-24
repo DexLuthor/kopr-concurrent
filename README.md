@@ -45,4 +45,4 @@ From Establishing connection to data sending:
    2. server sends file's path, where it is going to be saved
    3. cyclically sends byte arrays
 
-![exchange](https://user-images.githubusercontent.com/53663457/99918529-c951a180-2d17-11eb-96ab-2e3fbe0f6195.png)
+![exchange](https://user-images.githubusercontent.com/53663457/100156713-ad7e0500-2ea9-11eb-831c-a0ec099f9320.png)
