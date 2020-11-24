@@ -27,7 +27,6 @@ public class FileSender {
     private final BlockingQueue<Pair<String, Long>> filesToSend = new LinkedBlockingQueue<>();
     private final AtomicBoolean isRunning = new AtomicBoolean();
     private ConcurrentMap<String, Long> filePathToBytes = new ConcurrentHashMap<>();
-    private Socket managingSocket;
     private ServerSocket serverSocket;
     private ExecutorService executor;
 
@@ -45,8 +44,7 @@ public class FileSender {
     public FileSender crawl(File fileToCrawl) {
         log.trace("started crawling");
 
-        final List<File> files = FileCrawler.crawl(fileToCrawl);
-        for (final File file : files) {
+        for (val file : FileCrawler.crawl(fileToCrawl)) {
             totalFileCount++;
             totalMb += file.length();
             filePathToBytes.put(file.getAbsolutePath(), 0L);
@@ -63,7 +61,6 @@ public class FileSender {
                 serverSocket = new ServerSocket(props.getPort());
                 log.info("Opening server socket " + serverSocket);
 
-                connectManagingSocket();
                 getAndSendMeta();
                 connectConsumers();
             } catch (IOException e) {
@@ -73,15 +70,13 @@ public class FileSender {
         return this;
     }
 
-    private void connectManagingSocket() throws IOException {
-        log.debug("Waiting for managing socket from client");
-        managingSocket = serverSocket.accept();
-        log.debug("Managing socket connected");
-    }
-
     @SuppressWarnings("unchecked")
     private void getAndSendMeta() {
         try {
+            log.debug("Waiting for managing socket from client");
+            Socket managingSocket = serverSocket.accept();
+            log.debug("Managing socket connected");
+
             val inputStream = new DataInputStream(managingSocket.getInputStream());
             val outputStream = new DataOutputStream(managingSocket.getOutputStream());
 
@@ -122,7 +117,6 @@ public class FileSender {
             try {
                 isRunning.set(true);
                 executor.shutdown();
-                connectManagingSocket();
                 getAndSendMeta();
                 connectConsumers();
                 send();

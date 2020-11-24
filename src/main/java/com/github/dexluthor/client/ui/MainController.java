@@ -11,21 +11,22 @@ import javafx.concurrent.Service;
 import javafx.concurrent.Task;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
-import javafx.scene.input.MouseEvent;
 import lombok.extern.slf4j.Slf4j;
 import lombok.val;
 
 import java.io.*;
 import java.net.Socket;
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 
 @Slf4j
 public class MainController {
+    private final ApplicationProperties props = ApplicationProperties.INSTANCE;
     private final DoubleProperty fileProgress = new SimpleDoubleProperty();
     private final DoubleProperty fileSizeProgress = new SimpleDoubleProperty();
-    private final ApplicationProperties props = ApplicationProperties.INSTANCE;
-    private final List<SavingService> services = new LinkedList<>();
     @FXML
     private ProgressBar progressBarFileLength;
     @FXML
@@ -39,11 +40,11 @@ public class MainController {
     @FXML
     private Label labelTo;
     @FXML
-    private Spinner<Integer> socketsSpinner;
+    private Slider socketsSlider;
     @FXML
     private Button startButton;
+
     private Socket managingSocket;
-    private boolean isRunning;
     private int totalFileCount;
     private long totalFileSize;
     private CountDownLatch countDownLatch;
@@ -52,8 +53,12 @@ public class MainController {
     void initialize() {
         labelFrom.setText(props.getSourceDir());
         labelTo.setText(props.getDestinationDir());
-        SpinnerValueFactory<Integer> spinner = new SpinnerValueFactory.IntegerSpinnerValueFactory(1, 12, Runtime.getRuntime().availableProcessors());
-        socketsSpinner.setValueFactory(spinner);
+
+        socketsSlider.setMin(1);
+        val availableProcessors = Runtime.getRuntime().availableProcessors();
+        socketsSlider.setMax(availableProcessors);
+        socketsSlider.setValue(availableProcessors);
+        socketsSlider.valueProperty().addListener((o, ov, newVal) -> socketsSlider.setValue(Math.round(newVal.doubleValue())));
 
         initListeners();
     }
@@ -70,33 +75,31 @@ public class MainController {
     }
 
     @FXML
-    void onStartButtonClick(MouseEvent event) {
-        props.setNumberOfSockets(socketsSpinner.getValue());
+    void onStartButtonClick() {
+        props.setNumberOfSockets((int) socketsSlider.getValue());
 
-        if (!isRunning) {
-            try {
-                managingSocket = new Socket(props.getIP(), props.getPort());
-                sendAndGetMeta();
-                for (int i = 0; i < socketsSpinner.getValue(); i++) {
-                    startSaving();
-                }
-            } catch (IOException e) {
-                log.error("Connection refused");
-                return;
+        try {
+            managingSocket = new Socket(props.getIP(), props.getPort());
+            sendAndGetMeta();
+            for (int i = 0; i < socketsSlider.getValue(); i++) {
+                startSaving();
             }
-            isRunning = true;
-            startButton.setText("Copying");
-            startButton.setDisable(true);
+            applyStylesToProgressBars(null);
+        } catch (IOException e) {
+            log.error("Connection refused");
+            return;
         }
+        startButton.setText("Copying");
+        startButton.setDisable(true);
     }
 
     private void sendAndGetMeta() {
-        countDownLatch = new CountDownLatch(socketsSpinner.getValue());
+        countDownLatch = new CountDownLatch((int) socketsSlider.getValue());
         try {
             val outputStream = new DataOutputStream(managingSocket.getOutputStream());
             val inputStream = new DataInputStream(managingSocket.getInputStream());
 
-            outputStream.writeInt(socketsSpinner.getValue());// sockets number
+            outputStream.writeInt((int) socketsSlider.getValue());// sockets number
 
             final Map<String, Long> pathDeliveredBytes = new HashMap<>();
             for (File file : FileCrawler.crawl(new File(props.getDestinationDir()))) {
@@ -134,7 +137,10 @@ public class MainController {
                     protected Void call() {
                         try {
                             countDownLatch.await();
-                            Platform.runLater(() -> startButton.setText("Finished"));
+                            Platform.runLater(() -> {
+                                applyStylesToProgressBars("-fx-accent: green");
+                                startButton.setText("Finished");
+                            });
                         } catch (InterruptedException e) {
                             e.printStackTrace();
                         }
@@ -154,11 +160,10 @@ public class MainController {
     private void startSaving() throws IOException {
         Socket socket = new Socket(props.getIP(), props.getPort());
         SavingService service = new SavingService(socket, fileProgress, fileSizeProgress);
-        services.add(service);
 
         service.setOnFailed(event -> {
-            if (isRunning) {
-                isRunning = false;
+            if (startButton.isDisabled()) {
+                applyStylesToProgressBars("-fx-accent: red");
                 startButton.setText("Restart");
                 startButton.setDisable(false);
             }
@@ -167,4 +172,8 @@ public class MainController {
         service.start();
     }
 
+    private void applyStylesToProgressBars(final String styles) {
+        progressBarFiles.setStyle(styles);
+        progressBarFileLength.setStyle(styles);
+    }
 }
