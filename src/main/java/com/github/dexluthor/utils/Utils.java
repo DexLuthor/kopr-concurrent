@@ -1,11 +1,14 @@
 package com.github.dexluthor.utils;
 
+import lombok.experimental.UtilityClass;
+
 import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
 
+@UtilityClass
 public class Utils {
-    public static Map<String, Long> unsentIntersection(Map<String, Long> server, Map<String, Long> client) {
+    public Map<String, Long> unsentIntersection(Map<String, Long> server, Map<String, Long> client) {
         final Map<String, Long> unsent = new HashMap<>();
         final ApplicationProperties props = ApplicationProperties.INSTANCE;
 
@@ -33,7 +36,7 @@ public class Utils {
     }
 
     @SuppressWarnings("ResultOfMethodCallIgnored")
-    public static void deleteDirOrFile(File file) {
+    public void deleteDirOrFile(File file) {
         if (file.isDirectory()) {
             final File[] files = file.listFiles();
             if (files != null) {

@@ -4,8 +4,11 @@ import com.github.dexluthor.client.ui.concurrent.SavingService;
 import com.github.dexluthor.utils.ApplicationProperties;
 import com.github.dexluthor.utils.FileCrawler;
 import com.github.dexluthor.utils.Utils;
+import javafx.application.Platform;
 import javafx.beans.property.DoubleProperty;
 import javafx.beans.property.SimpleDoubleProperty;
+import javafx.concurrent.Service;
+import javafx.concurrent.Task;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
 import javafx.scene.input.MouseEvent;
@@ -116,11 +119,30 @@ public class MainController {
             }
             totalFileCount = inputStream.readInt();
             fileSizeProgress.set(inputStream.readLong());
+            fileProgress.set(inputStream.readInt());
             totalFileSize = inputStream.readLong();
         } catch (IOException e) {
             e.printStackTrace();
         }
+        changeButtonTextAfterFinish();
+    }
 
+    private void changeButtonTextAfterFinish() {
+        new Service<Void>() {
+            protected Task<Void> createTask() {
+                return new Task<Void>() {
+                    protected Void call() {
+                        try {
+                            countDownLatch.await();
+                            Platform.runLater(() -> startButton.setText("Finished"));
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
+                        return null;
+                    }
+                };
+            }
+        }.start();
     }
 
     @SuppressWarnings("OptionalGetWithoutIsPresent")
@@ -140,9 +162,8 @@ public class MainController {
                 startButton.setText("Restart");
                 startButton.setDisable(false);
             }
-            service.cancel();
-            event.getSource().getException().printStackTrace();
         });
+        service.setOnSucceeded(e -> countDownLatch.countDown());
         service.start();
     }
 

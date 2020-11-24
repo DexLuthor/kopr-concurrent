@@ -31,8 +31,8 @@ public class SavingService extends Service<Void> {
 
     class SavingTask extends Task<Void> {
 
+        @SuppressWarnings("ResultOfMethodCallIgnored")
         @Override
-        @SuppressWarnings("all")
         protected Void call() {
             try {
                 DataInputStream in = new DataInputStream(socket.getInputStream());
@@ -69,14 +69,12 @@ public class SavingService extends Service<Void> {
                         log.info("Saved {}", fileName);
                     }
                 }
-            } catch (NullPointerException e) {
-                log.error("File error");
             } catch (EOFException e) {
                 log.warn("EOFException");
             } catch (IOException e) {
                 if ("Connection reset".equals(e.getMessage())) {
                     log.warn("Server disconnected");
-                    return null;
+                    throw new RuntimeException();
                 }
             }
             return null;

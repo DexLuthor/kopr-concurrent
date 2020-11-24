@@ -4,31 +4,35 @@ import com.github.dexluthor.server.concurrent.FileSendingJob;
 import com.github.dexluthor.utils.ApplicationProperties;
 import com.github.dexluthor.utils.FileCrawler;
 import com.github.dexluthor.utils.Pair;
-import com.github.dexluthor.utils.Utils;
 import lombok.extern.slf4j.Slf4j;
 import lombok.val;
+import lombok.var;
 
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static com.github.dexluthor.utils.Utils.unsentIntersection;
+
 @Slf4j
 public class FileSender {
-    private final List<Socket> sockets = new LinkedList<>();
-    private final List<File> allFiles = new LinkedList<>();
-    private final BlockingQueue<Pair<String, Long>> filesFromServer = new LinkedBlockingQueue<>();
     private final ApplicationProperties props = ApplicationProperties.INSTANCE;
-    private final AtomicBoolean isRunning = new AtomicBoolean(false);
+    private final List<Socket> sockets = new LinkedList<>();
+    private final BlockingQueue<Pair<String, Long>> filesToSend = new LinkedBlockingQueue<>();
+    private final AtomicBoolean isRunning = new AtomicBoolean();
     private ConcurrentMap<String, Long> filePathToBytes = new ConcurrentHashMap<>();
     private Socket managingSocket;
     private ServerSocket serverSocket;
     private ExecutorService executor;
-    private CountDownLatch countDownLatch;
+
+    private long totalMb, actualMb;
+    private int totalFileCount;
 
     public boolean isRunning() {
         return isRunning.get();
@@ -43,7 +47,8 @@ public class FileSender {
 
         final List<File> files = FileCrawler.crawl(fileToCrawl);
         for (final File file : files) {
-            allFiles.add(file);
+            totalFileCount++;
+            totalMb += file.length();
             filePathToBytes.put(file.getAbsolutePath(), 0L);
         }
 
@@ -77,34 +82,25 @@ public class FileSender {
     @SuppressWarnings("unchecked")
     private void getAndSendMeta() {
         try {
-            val inputStream = new DataInputStream(managingSocket.getInputStream());// sockets num
+            val inputStream = new DataInputStream(managingSocket.getInputStream());
             val outputStream = new DataOutputStream(managingSocket.getOutputStream());
 
             props.setNumberOfSockets(inputStream.readInt());                                         // number of sockets
             final String continueOrStart = inputStream.readUTF();                                    // continue or start
+
+            var mapFromClient = Collections.<String, Long>emptyMap();
             if ("continue".equalsIgnoreCase(continueOrStart)) {
-                val objectInputStream = new ObjectInputStream(managingSocket.getInputStream()); // map
-                filePathToBytes = new ConcurrentHashMap<>(
-                        Utils.unsentIntersection(filePathToBytes, (Map<String, Long>) objectInputStream.readObject())
-                );
-                filesFromServer.addAll(Pair.ofMap(filePathToBytes));
-            } else if ("start".equalsIgnoreCase(continueOrStart)) {
-                filesFromServer.addAll(Pair.ofMap(filePathToBytes));
+                mapFromClient = (Map<String, Long>) new ObjectInputStream(managingSocket.getInputStream()).readObject();
+
+                actualMb = mapFromClient.values().stream().reduce(Long::sum).orElse(0L);
+
+                filePathToBytes = new ConcurrentHashMap<>(unsentIntersection(filePathToBytes, mapFromClient));
             }
-            outputStream.writeInt(filesFromServer.size());
-            outputStream.writeLong(filesFromServer // actual
-                    .stream()
-                    .peek(e -> System.out.println("Pair: " + e))
-                    .map(Pair::getValue)
-                    .reduce(Long::sum)
-                    .get()
-            );
-            outputStream.writeLong(allFiles // total
-                    .stream()
-                    .map(File::length)
-                    .reduce(Long::sum)
-                    .get()
-            );
+            filesToSend.addAll(Pair.ofMap(filePathToBytes));
+            outputStream.writeInt(totalFileCount);                          // total files
+            outputStream.writeLong(actualMb);                               // actual mb
+            outputStream.writeInt(totalFileCount - filesToSend.size());  // actual files
+            outputStream.writeLong(totalMb);                                // total mb
         } catch (IOException e) {
             e.printStackTrace();
         } catch (ClassNotFoundException e) {
@@ -137,12 +133,12 @@ public class FileSender {
     }
 
     public void send() {
-        countDownLatch = new CountDownLatch(props.getNumberOfSockets());
+        final CountDownLatch countDownLatch = new CountDownLatch(props.getNumberOfSockets());
         executor = Executors.newFixedThreadPool(props.getNumberOfSockets());
         try {
             for (Socket socket : sockets) {
                 DataOutputStream dataOutputStream = new DataOutputStream(socket.getOutputStream());
-                executor.execute(new FileSendingJob(dataOutputStream, filesFromServer, this, countDownLatch));
+                executor.execute(new FileSendingJob(dataOutputStream, filesToSend, this, countDownLatch));
             }
         } catch (IOException e) {
             e.printStackTrace();
