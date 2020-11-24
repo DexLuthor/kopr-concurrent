@@ -42,10 +42,6 @@ public enum ApplicationProperties {
         properties.setProperty("numberOfSockets", String.valueOf(n));
     }
 
-    public String getPoisonPill() {
-        return properties.getProperty("poisonPill");
-    }
-
     public int getChunkSize() {
         return Integer.parseInt(properties.getProperty("chunkSize"));
     }

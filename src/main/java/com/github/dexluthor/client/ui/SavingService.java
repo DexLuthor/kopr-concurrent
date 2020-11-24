@@ -1,4 +1,4 @@
-package com.github.dexluthor.client.ui.concurrent;
+package com.github.dexluthor.client.ui;
 
 import com.github.dexluthor.utils.ApplicationProperties;
 import javafx.beans.property.DoubleProperty;

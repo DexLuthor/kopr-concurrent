@@ -1,6 +1,5 @@
 package com.github.dexluthor.client.ui;
 
-import com.github.dexluthor.client.ui.concurrent.SavingService;
 import com.github.dexluthor.utils.ApplicationProperties;
 import com.github.dexluthor.utils.FileCrawler;
 import com.github.dexluthor.utils.Utils;
