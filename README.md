@@ -46,3 +46,27 @@ From Establishing connection to data sending:
    3. cyclically sends byte arrays
 
 ![exchange](https://user-images.githubusercontent.com/53663457/100156713-ad7e0500-2ea9-11eb-831c-a0ec099f9320.png)
+
+## May help
+``` java
+// DataStreams can read and write data types such as int, boolean, string... 
+DataInputStream dis = new DataInputStream(...);
+DataOutputStream dos = new DataOutputStream(...);
+dos.writeInt(1);
+dos.writeUTF("Hello");
+int i = dis.readInt();
+String s = dis.readUTF();
+```
+``` java
+// ObjectStreams can read and write serializable objects (class x implements Serializable)
+ObjectOutputStream oos = new ObjectOutputStream(...);
+oos.writeObject(new Person("Tomas"));
+ObjectInputStream ois = new ObjectInputStream(...);
+Person p = (Person)ois.readObject();
+```
+``` java
+// RandomAccessFile can read and write to files with any offset  
+RandomAccessFile raf = new RandomAccessFile(file, "rw"); // rw = read write
+raf.seek(10); // moves file cursor by 10 bytes
+raf.write(...);
+```
